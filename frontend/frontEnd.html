@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disease Prediction</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div class="sidebar">
+            <h3>Multiple Disease Prediction</h3>
+             <button v-for="(item, index) in diseases" :key="index" 
+                    :class="{'active': selectedDisease === item}" 
+                    @click="selectedDisease = item">
+                {{ item }}
+            </button>
+        </div>
+
+        <div class="content">
+            <h2>{{ selectedDisease }} using ML</h2>
+
+            <!-- 症状预测部分 -->
+            <div v-if="selectedDisease === 'Disease Prediction'">
+                <img src="img/DiseasePrediction.jpg" alt="Disease Prediction" class="disease-image">
+                <h4>What are your symptoms?</h4>
+                <div class="symptom-input">
+                    <input v-model="newSymptom" @keyup.enter="addSymptom" placeholder="Enter a symptom">
+                    <button @click="addSymptom">+</button>
+                    <button @click="toggleSymptomList">Select</button>
+                </div>
+
+                <div v-if="showSymptomList" class="symptom-list">
+                    <div v-for="(symptom, index) in availableSymptoms" :key="index" @click="addSymptomFromList(symptom)" class="symptom-item">
+                        {{ symptom }}
+                    </div>
+                </div> 
+
+                <div class="symptom-tags">
+                    <span v-for="(symptom, index) in symptoms" :key="index" class="tag">
+                        {{ symptom }} <button @click="removeSymptom(index)">x</button>
+                    </span>
+                </div>
+                <button class="predictDisease" @click="predictDisease">Predict</button>
+
+                <div v-if="predictionResult">
+                    <h3>Disease: {{ predictionResult.disease }} with {{ (predictionResult.probability * 100).toFixed(2) }}% probability</h3>
+                    <div class="tabs">
+                        <button @click="activeTab = 'description'" :class="{ active: activeTab === 'description' }">Description</button>
+                        <button @click="activeTab = 'precautions'" :class="{ active: activeTab === 'precautions' }">Precautions</button>
+                    </div>
+                    <div v-if="activeTab === 'description'">
+                        <p>{{ predictionResult.description }}</p>
+                    </div>
+                    <div v-if="activeTab === 'precautions'">
+                        <ul>
+                            <li v-for="precaution in predictionResult.precautions" :key="precaution">{{ precaution }}</li>
+                        </ul>
+                    </div>
+                </div>
+                <p v-if="errorMessage" style="color: red;">{{ errorMessage }}</p>               
+            </div>
+
+            <!-- 其他疾病预测（例如Diabetes, Heart Disease）-->
+            <div v-if="selectedDisease === 'Diabetes Prediction' || selectedDisease === 'Heart Disease Prediction' || selectedDisease === 'Covid-19 Prediction' || selectedDisease === 'Liver Disease Prediction'">
+                <div class="grid-container">
+                    <div v-for="(value, key) in diseaseInputs[selectedDisease]" :key="key" class="input-group">
+                        <label>{{ key.replace(/([A-Z])/g, ' $1') }}</label>
+                        <div class="input-container">
+                            <template v-if="typeof value === 'number'">
+                                <button @click="diseaseInputs[selectedDisease][key]--">-</button>
+                                <input type="number" v-model="diseaseInputs[selectedDisease][key]" step="0.01" min="0">
+                                <button @click="diseaseInputs[selectedDisease][key]++">+</button>
+                            </template>
+                            <template v-else>
+                                <select v-model="diseaseInputs[selectedDisease][key]">
+                                    <option v-for="option in diseaseOptions[selectedDisease][key]" :key="option" :value="option">{{ option }}</option>
+                                </select>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <!-- 按钮和预测结果部分 -->
+                <div class="predict-container">
+                    <button class="predict-button" @click="predictMap[selectedDisease]()">{{ selectedDisease }}</button>
+
+                    <div v-if="selectedDisease === 'Heart Disease Prediction' && heartDiseaseResult" class="predict-result">
+                        <h3 :style="{ color: heartDiseaseResult.has_heart_disease == 1 ? 'red' : 'green' }">
+                            {{ heartDiseaseResult.has_heart_disease == 1 ? 'You might have heart disease.' : 'You are unlikely to have heart disease.' }}
+                        </h3>
+                        <!-- <p>Probability: {{ (heartDiseaseResult.probability * 100).toFixed(2) }}%</p> -->
+                    </div>
+
+                    <div v-if="selectedDisease === 'Diabetes Prediction' && diabetesResult" class="predict-result">
+                        <h3 :style="{ color: diabetesResult.diabetes == 1 ? 'red' : 'green' }">
+                          {{ diabetesResult.diabetes == 1 ? 'Positive for diabetes' : 'Negative for diabetes' }}
+                        </h3>
+                        <!-- <p>Probability: {{ (diabetesResult.probability * 100).toFixed(2) }}%</p> -->
+                    </div>
+
+                    <div v-if="selectedDisease === 'Covid-19 Prediction' && covidResult" class="predict-result">
+                        <h3 :style="{ color: covidResult.Corona == 1 ? 'red' : 'green' }">
+                            {{ covidResult.Corona == 1 ? 'Positive for Covid-19' : 'Negative for Covid-19' }}
+                        </h3>
+                        <!-- <p>Probability: {{ (covidResult.probability * 100).toFixed(2) }}%</p> -->
+                    </div>
+
+                    <div v-if="selectedDisease === 'Liver Disease Prediction' && liverResult" class="predict-result">
+                        <h3 :style="{ color: liverResult.liver_disease == 1 ? 'red' : 'green' }">
+                            {{ liverResult.liver_disease == 1 ? 'Positive for liver disease' : 'No liver disease detected' }}
+                        </h3>
+                        <!-- <p>Probability: {{ (liverResult.probability * 100).toFixed(2) }}%</p> -->
+                    </div>
+                </div>
+                <p v-if="errorMessage" style="color: red;">{{ errorMessage }}</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+        createApp({
+            setup() {
+                const diseases = ref([
+                    'Disease Prediction',
+                    'Diabetes Prediction',
+                    'Heart Disease Prediction',
+                    'Covid-19 Prediction',
+                    'Liver Disease Prediction'
+                ]);
+
+                const selectedDisease = ref('Disease Prediction');
+                const symptoms = ref([]);
+                const newSymptom = ref('');
+                const predictionResult = ref(null);
+                const heartDiseaseResult = ref(null);
+                const diabetesResult = ref(null);
+                const covidResult = ref(null);
+                const liverResult = ref(null);
+                const activeTab = ref('description');
+                const errorMessage = ref('');
+                
+                const addSymptom = () => {
+                    if (newSymptom.value.trim() !== '' && !symptoms.value.includes(newSymptom.value)) {
+                        symptoms.value.push(newSymptom.value.trim());
+                        newSymptom.value = '';
+                    }
+                };
+
+                const removeSymptom = (index) => {
+                    symptoms.value.splice(index, 1);
+                };
+
+                const predictDisease = async () => {
+                    if (symptoms.value.length === 0) {
+                        errorMessage.value = "Please enter at least one symptom.";
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch("http://127.0.0.1:5001/predict/disease", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ symptoms: symptoms.value })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+
+                        predictionResult.value = await response.json();
+                        errorMessage.value = "";
+                    } catch (error) {
+                        console.error("Error fetching prediction:", error);
+                        errorMessage.value = "Failed to fetch prediction. Check backend connection.";
+                    }
+                };
+
+                const diseaseInputs = ref({
+                    'Diabetes Prediction': {
+                        // gender: 'Female',
+                        // age: 67,
+                        // hypertension: 0,
+                        // heart_disease: 0,
+                        // smoking_history: 'never',
+                        // bmi: 63.48,
+                        // HbA1c_level: 8.8,
+                        // blood_glucose_level: 155,
+                        gender: 'Female',
+                        age: 54,
+                        hypertension: 0,
+                        heart_disease: 0,
+                        smoking_history: 'former',
+                        bmi: 54.7,
+                        HbA1c_level: 6,
+                        blood_glucose_level: 100,
+                    },
+
+                    'Heart Disease Prediction': {
+                        Age: 70,  // 示例：填写合适的数字
+                        Sex: 'Male',
+                        ChestPainType: 'Asymptomatic',
+                        RestingBloodPressure: 130,
+                        SerumCholesterol: 322,
+                        FastingBloodSugarOver120: 'False',
+                        RestingECGResult: 'ST-T Abnormality',
+                        MaxHeartRate: 109,
+                        ExerciseInducedAngina: 'No',
+                        ST_Depression: 2.4,
+                        ST_Slope: 'Flat',
+                        NumberOfMajorVessels: 3,
+                        Thallium: 'Normal'
+                        // Age: 67,
+                        // Sex: 'Female',
+                        // ChestPainType: 'Non-Anginal Pain',
+                        // RestingBloodPressure: 115,
+                        // SerumCholesterol: 564,
+                        // FastingBloodSugarOver120: 'False',
+                        // RestingECGResult: 'Left Ventricular Hypertrophy',
+                        // MaxHeartRate: 160,
+                        // ExerciseInducedAngina: 'No',
+                        // ST_Depression: 1.6,
+                        // ST_Slope: 'Flat',
+                        // NumberOfMajorVessels: 0,
+                        // Thallium: 'Reversible Defect'
+                    },
+
+                    'Covid-19 Prediction': {
+                        Cough_symptoms: 'TRUE',
+                        Fever: 'TRUE',
+                        Sore_throat: 'FALSE',
+                        Shortness_of_breath: 'FALSE',
+                        Headache: 'FALSE',
+                        Age_60_above: 'Yes',
+                        Sex: 'male',
+                        Known_contact: 'Contact with confirmed'
+                    },
+
+                    'Liver Disease Prediction': {
+                        Age: 60,
+                        Gender: 'Male',
+                        Total_Bilirubin: 0.5,
+                        Direct_Bilirubin: 0.1,
+                        Alkaline_Phosphotase: 500,
+                        Alamine_Aminotransferase: 20,
+                        Aspartate_Aminotransferase: 34,
+                        Total_Protiens: 5.9,
+                        Albumin: 1.6,
+                        Albumin_and_Globulin_Ratio: 0.37
+                    }
+
+                });
+
+                const diseaseOptions = ref({
+                    'Heart Disease Prediction': {
+                        Sex: ['Female','Male'],
+                        ChestPainType: ['Typical Angina', 'Atypical Angina', 'Non-Anginal Pain', 'Asymptomatic'],
+                        FastingBloodSugarOver120: ['False', 'True'],
+                        RestingECGResult: ['Normal', 'ST-T Abnormality', 'Left Ventricular Hypertrophy'],
+                        ExerciseInducedAngina: ['No','Yes'],
+                        ST_Slope: ['Upsloping', 'Flat', 'Downsloping'],
+                        NumberOfMajorVessels: [0, 1, 2, 3],
+                        Thallium: ['Normal', 'Fixed Defect', 'Reversible Defect']
+                    },
+
+                    'Diabetes Prediction': {
+                        gender: ['Female','Male'],
+                        smoking_history: ['never', 'former', 'current','not current', 'No Info']
+                    },
+
+                    'Covid-19 Prediction': {
+                        Cough_symptoms: ['TRUE', 'FALSE'],
+                        Fever: ['TRUE', 'FALSE'],
+                        Sore_throat: ['TRUE', 'FALSE'],
+                        Shortness_of_breath: ['TRUE', 'FALSE'],
+                        Headache: ['TRUE', 'FALSE'],
+                        Age_60_above: ['Yes', 'No'],
+                        Sex: ['female', 'male'],
+                        Known_contact: ['Abroad', 'Other', 'Contact with confirmed']
+                    },
+                    
+                    'Liver Disease Prediction': {
+                        Gender: ['Male', 'Female']
+                    }
+
+                });
+
+                const predictHeartDisease = async () => {
+                    heartDiseaseResult.value = null;
+                    try {
+                        const response = await fetch("http://127.0.0.1:5001/predict/heart", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(diseaseInputs.value['Heart Disease Prediction'])
+                        });
+
+                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        
+                        const heartResult = await response.json();
+                        heartDiseaseResult.value = {
+                            has_heart_disease: heartResult.has_heart_disease
+                            // probability: heartResult.probability
+                        };
+                        errorMessage.value = "";  // 清除错误信息
+
+                    } catch (error) {
+                        console.error("Prediction error:", error);
+                        errorMessage.value = "Failed to predict. Please check backend connection.";
+                    }
+                };
+
+                const predictDiabetes = async () => {
+                    try {
+                        const response = await fetch('http://127.0.0.1:5001/predict/diabetes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(diseaseInputs.value['Diabetes Prediction'])
+                        });
+                        if (!response.ok) throw new Error(response.statusText);
+                        diabetesResult.value = await response.json();
+                        errorMessage.value = '';
+                    } catch (err) {
+                        errorMessage.value = 'Diabetes prediction failed.';
+                    }
+                };
+
+                const predictCovid = async () => {
+                    covidResult.value = null; // 清空以前的结果
+                    try {
+                        const response = await fetch("http://127.0.0.1:5001/predict/covid", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(diseaseInputs.value['Covid-19 Prediction'])
+                        });
+
+                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        // 获取预测结果
+                        // covidResult.value = await response.json();   // 将预测结果赋值给变量
+                        // errorMessage.value = '';     // 清空错误信息
+                        const result = await response.json();
+                        covidResult.value = result;  // 将预测结果赋值给变量
+                        errorMessage.value = '';    
+                    } catch (error) {
+                        console.error("Covid prediction error:", error);
+                        errorMessage.value = 'Failed to predict. Please check backend connection.';
+                    }
+                };
+
+                const predictLiver = async () => {
+                    liverResult.value = null;
+                    try {
+                        const response = await fetch("http://127.0.0.1:5001/predict/liver", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(diseaseInputs.value['Liver Disease Prediction'])
+                        });
+
+                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        liverResult.value = await response.json();
+                        errorMessage.value = '';
+                    } catch (error) {
+                        console.error("Liver prediction error:", error);
+                        errorMessage.value = 'Failed to predict liver disease. Please check backend connection.';
+                    }
+                };
+
+                const predictMap = {
+                    'Disease Prediction': () => {}, // 默认空函数，防止报错
+                    'Diabetes Prediction': predictDiabetes,
+                    'Heart Disease Prediction': predictHeartDisease,
+                    'Covid-19 Prediction': predictCovid,
+                    'Liver Disease Prediction': predictLiver
+                };
+                
+                return { 
+                    diseases, selectedDisease, symptoms, newSymptom, addSymptom, removeSymptom, 
+                    predictionResult, heartDiseaseResult, diabetesResult, covidResult,liverResult,
+                    activeTab, errorMessage, diseaseInputs, diseaseOptions, 
+                    predictDisease, predictHeartDisease,predictDiabetes,predictCovid,predictLiver,predictMap
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
